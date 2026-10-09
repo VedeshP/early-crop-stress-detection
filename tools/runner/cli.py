@@ -103,12 +103,30 @@ def preflight(workspace, need_gpu=True, need_gb=0):
             issues.append("PyTorch cannot see a GPU - install the CUDA build of torch (see requirements.txt)")
     except ImportError:
         issues.append("PyTorch not installed")
+    try:
+        import torch
+        import torchvision
+        info.append(f"torchvision {torchvision.__version__}")
+        tv_cuda = "+cu" in torchvision.__version__
+        t_cuda = "+cu" in torch.__version__
+        if t_cuda != tv_cuda or (t_cuda and torch.__version__.split("+")[1] != torchvision.__version__.split("+")[1]):
+            issues.append(f"torch {torch.__version__} and torchvision {torchvision.__version__} are different builds; "
+                          "reinstall both together: pip uninstall -y torch torchvision && pip install torch torchvision "
+                          "--index-url https://download.pytorch.org/whl/cu124")
+    except ImportError:
+        pass
+    except Exception as e:
+        issues.append(f"torchvision is broken ({type(e).__name__}: {str(e)[:120]}). Usually torch/torchvision versions "
+                      "do not match; reinstall both together: pip uninstall -y torch torchvision && pip install torch "
+                      "torchvision --index-url https://download.pytorch.org/whl/cu124")
     for mod, pip in (("segmentation_models_pytorch", "segmentation-models-pytorch"), ("cv2", "opencv-python-headless"),
                      ("nbclient", "nbclient"), ("ipykernel", "ipykernel"), ("pandas", "pandas"), ("matplotlib", "matplotlib")):
         try:
             __import__(mod)
         except ImportError:
             issues.append(f"missing package: pip install {pip}")
+        except Exception as e:  # installed but fails to load (e.g. torch/torchvision mismatch)
+            issues.append(f"{mod} fails to import: {type(e).__name__}: {str(e)[:160]}")
     try:
         from jupyter_client.kernelspec import KernelSpecManager
         spec = KernelSpecManager().get_kernel_spec("python3")
