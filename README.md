@@ -149,6 +149,27 @@ GPU too hot, and low disk. If heartbeats stop arriving, the machine or the runne
 The page cannot run commands. Only expose it (especially through a tunnel) on a machine where the owner / IT
 allows it.
 
+### Results and charts (matplotlib optional)
+matplotlib is **optional**. If it cannot load (e.g. blocked by a Windows application-control policy),
+`run.py check` shows a warning, notebooks skip their charts, and everything else runs normally.
+The data behind every chart is always saved:
+
+| Saved file | Chart it feeds |
+|---|---|
+| `outputs/eda/class_summary.csv`, `index_ndvi.npz`, `index_gndvi.npz` | class balance, NDVI/GNDVI per class |
+| `outputs/eda/sample_tiles*.png`, `runs/<run>/predictions_val.png` | image panels (drawn with OpenCV, always produced) |
+| `runs/<run>/history.csv` | training curves |
+| `runs/<run>/eval_*.json`, `eval_*.csv`, `confusion_*.csv` | run comparison, per-class IoU, confusion matrices |
+
+At the end of every run a small **results zip** (no checkpoints, no dataset; a few MB) is written to
+`workspace/results_<time>.zip`. Make one any time with `python run.py export-results`, or download it from
+the dashboard ("download results (zip)"). On your own computer:
+
+```bash
+pip install matplotlib pandas numpy opencv-python-headless
+python tools/make_charts.py results_20261012-101500.zip      # -> results_20261012-101500_charts/*.png
+```
+
 ## Experiments (notebook 03 `CONFIG`)
 
 | Run | `arch` / `encoder` | `channels` |

@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
@@ -331,6 +332,7 @@ def evaluate_checkpoint(path, data_root=None, split="val", tta="flip", max_tiles
         out = Path(path).parent
         tag = f"{split}_tta-{tta}" + (f"_n{max_tiles}" if max_tiles else "")
         table.to_csv(out / f"eval_{tag}.csv")
+        pd.DataFrame(metric.cm.numpy(), index=metric.names, columns=metric.names).to_csv(out / f"confusion_{tag}.csv")
         (out / f"eval_{tag}.json").write_text(json.dumps(summary, indent=2))
     print(f"{Path(path).name} on {split} ({len(ds)} tiles, TTA={tta}): mIoU {res['miou']:.4f}")
     return {"summary": summary, "table": table, "metric": metric}

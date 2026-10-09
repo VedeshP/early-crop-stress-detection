@@ -31,6 +31,7 @@ from runner import kaggle_target  # noqa: E402
 from runner.dashboard import Dashboard, Tunnel  # noqa: E402
 from runner.monitor import Monitor, gpu_stats  # noqa: E402
 from runner.notify import Notifier  # noqa: E402
+from runner.results import export as export_results  # noqa: E402
 from runner.state import RunState, now  # noqa: E402
 
 NOTEBOOK = {"data": "01_prepare_data", "explore": "02_explore_data", "train": "03_train", "evaluate": "04_evaluate"}
@@ -120,7 +121,7 @@ def preflight(workspace, need_gpu=True, need_gb=0):
                       "do not match; reinstall both together: pip uninstall -y torch torchvision && pip install torch "
                       "torchvision --index-url https://download.pytorch.org/whl/cu124")
     for mod, pip in (("segmentation_models_pytorch", "segmentation-models-pytorch"), ("cv2", "opencv-python-headless"),
-                     ("nbclient", "nbclient"), ("ipykernel", "ipykernel"), ("pandas", "pandas"), ("matplotlib", "matplotlib")):
+                     ("nbclient", "nbclient"), ("ipykernel", "ipykernel"), ("pandas", "pandas")):
         try:
             __import__(mod)
         except ModuleNotFoundError as e:
@@ -130,7 +131,9 @@ def preflight(workspace, need_gpu=True, need_gb=0):
                 issues.append(f"{mod} is installed but needs '{e.name}', which is missing: python -m pip install {e.name}")
         except ImportError as e:  # installed but cannot load, e.g. "DLL load failed" on Windows
             issues.append(f"{mod} is installed but fails to load: {str(e)[:200]}"
-                          + (" -> install the Microsoft Visual C++ Redistributable (x64) and reboot"
+                          + (" -> blocked by a Windows application-control policy: ask IT / the owner to allow it"
+                             if "policy" in str(e).lower() else
+                             " -> install the Microsoft Visual C++ Redistributable (x64) and reboot"
                              if "DLL load failed" in str(e) else ""))
         except Exception as e:  # installed but fails to load (e.g. torch/torchvision mismatch)
             issues.append(f"{mod} fails to import: {type(e).__name__}: {str(e)[:160]}")
@@ -144,6 +147,15 @@ def preflight(workspace, need_gpu=True, need_gb=0):
                           f"Fix: {sys.executable} -m ipykernel install --user")
     except Exception as e:
         issues.append(f"no Jupyter kernel 'python3' ({e}); fix: python -m ipykernel install --user")
+    try:
+        import matplotlib.pyplot  # noqa: F401
+        info.append("matplotlib: ok")
+    except Exception as e:  # optional: charts are skipped, their data is saved
+        why = str(e)[:160]
+        hint = (" (blocked by a Windows application-control policy - ask IT/owner to allow it)"
+                if "policy" in why.lower() else "")
+        info.append(f"WARNING matplotlib unavailable: {why}{hint}. Not a blocker: charts are skipped and their "
+                    "data is saved; draw them on another computer with tools/make_charts.py")
     g = gpu_stats()
     info.append(f"nvidia-smi: {g[0]['name'] if g else 'not found'}")
     workspace.mkdir(parents=True, exist_ok=True)
@@ -378,6 +390,11 @@ def cmd_run(args):
     finally:
         monitor.stop()
         keep_awake(False)
+        try:
+            zpath = export_results(workspace)
+            state.update(results_zip=str(zpath))
+        except Exception as e:
+            print(f"[results] export failed: {e}")
         notifier.send("Run finished" if ok else "Run ended", monitor.summary(), "high" if not ok else "default",
                       ("checkered_flag",))
         if args.dashboard and args.linger_minutes and dash:
@@ -392,6 +409,11 @@ def cmd_run(args):
             dash.stop()
     print(f"\nrun folder: {state.dir}")
     return 0 if ok else 1
+
+
+def cmd_export(args):
+    export_results(Path(args.workspace or "workspace").resolve(), args.out)
+    return 0
 
 
 def cmd_status(args):
@@ -489,6 +511,11 @@ def main(argv=None):
     c = sub.add_parser("check", help="pre-flight check of this machine")
     c.add_argument("--workspace")
     c.set_defaults(func=cmd_check)
+
+    e = sub.add_parser("export-results", help="zip results (no checkpoints/data) to copy to another computer")
+    e.add_argument("--workspace")
+    e.add_argument("--out", help="zip path (default: workspace/results_<time>.zip)")
+    e.set_defaults(func=cmd_export)
 
     b = sub.add_parser("build", help="rebuild notebooks into build/")
     b.set_defaults(func=cmd_build)

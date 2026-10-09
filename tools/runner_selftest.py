@@ -7,12 +7,14 @@ answers with live state, a re-run skips finished steps, and a failing step is re
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -66,9 +68,16 @@ def main():
     cfg_path = work / "selftest.json"
     cfg_path.write_text(json.dumps(cfg, indent=2))
 
+    # simulate a machine where Windows application control blocks matplotlib
+    blocked = work / "blocked_mpl"
+    (blocked / "matplotlib").mkdir(parents=True)
+    (blocked / "matplotlib" / "__init__.py").write_text(
+        'raise ImportError("DLL load failed while importing ft2font: An Application Control policy has blocked this file.")')
+    env = dict(os.environ, PYTHONPATH=str(blocked))
     cmd = [sys.executable, str(REPO / "run.py"), "run", "--config", str(cfg_path), "--notify", str(notify),
            "--dashboard", "--port", "8790", "--token", "tok", "--ignore-checks"]
-    p = subprocess.Popen(cmd, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    p = subprocess.Popen(cmd, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    zip_from_dashboard = None
     dash_seen, lines = [], []
 
     def reader():
@@ -81,6 +90,9 @@ def main():
             with urllib.request.urlopen("http://127.0.0.1:8790/api/state?t=tok", timeout=5) as r:
                 s = json.loads(r.read())
                 dash_seen.append((s["status"], s.get("current"), len(s.get("log_tail", []))))
+            if s.get("current") is not None and s["current"] >= 4 and zip_from_dashboard is None:
+                with urllib.request.urlopen("http://127.0.0.1:8790/results.zip?t=tok", timeout=30) as r:
+                    zip_from_dashboard = r.read()
         except OSError:
             pass
     time.sleep(1)
@@ -98,8 +110,33 @@ def main():
         assert any(want in (t or "") for t in titles), f"missing notification: {want}"
     assert all(m["path"] == "/selftest" for m in RECEIVED)
 
+    # ---- matplotlib was blocked, yet everything ran; results zip has the chart data
+    assert "matplotlib unavailable" in "".join(
+        p.read_text(encoding="utf-8") for p in (work / "ws" / "runner").glob("*/logs/*explore*.log"))
+    zips = sorted((work / "ws").glob("results_*.zip"))
+    assert zips, "results zip not written"
+    names = zipfile.ZipFile(zips[-1]).namelist()
+    for want in ("eda/class_summary.csv", "eda/index_ndvi.npz", "eda/sample_tiles.png", "unet_t/history.csv",
+                 "segformer_t/confusion_val_tta-flip.csv", "segformer_t/predictions_val.png", "logs/", "state.json"):
+        assert any(want in n for n in names), f"missing in zip: {want}"
+    assert not any(n.endswith((".pt", ".bin")) for n in names), "zip must not contain checkpoints/data"
+    assert zip_from_dashboard and zip_from_dashboard[:2] == b"PK", "dashboard zip download failed"
+    print(f"results zip: {len(names)} files, {zips[-1].stat().st_size / 1e6:.2f} MB; dashboard zip "
+          f"{len(zip_from_dashboard) / 1e6:.2f} MB")
+
+    # ---- charts drawn later from the zip, on a machine with matplotlib
+    ch = subprocess.run([sys.executable, str(REPO / "tools" / "make_charts.py"), str(zips[-1]),
+                         "--out", str(work / "charts")], capture_output=True, text=True)
+    assert ch.returncode == 0, ch.stdout + ch.stderr
+    charts = sorted(p.name for p in (work / "charts").glob("*.png"))
+    print("charts:", *charts, sep="\n  ")
+    for want in ("class_shares_train.png", "index_ndvi.png", "history_unet_t.png", "miou_all_runs.png",
+                 "comparison.png", "per_class_iou.png", "sample_tiles.png", "segformer_t_predictions_val.png"):
+        assert want in charts, f"missing chart {want}"
+    assert any(c.startswith("confusion_") for c in charts)
+
     # ---- re-run: everything already done -> skipped
-    p2 = subprocess.run(cmd[:-6] + ["--ignore-checks"], cwd=REPO, capture_output=True, text=True)
+    p2 = subprocess.run(cmd[:-6] + ["--ignore-checks"], cwd=REPO, capture_output=True, text=True, env=env)
     assert p2.returncode == 0, p2.stdout[-2000:]
     s2 = json.loads(sorted((work / "ws" / "runner").glob("*/state.json"))[-1].read_text())
     st2 = {s["name"]: s["status"] for s in s2["steps"]}

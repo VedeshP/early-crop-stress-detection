@@ -56,10 +56,14 @@ viz.plot_confusion(flip["metric"]);
 # ## Predictions
 
 # %%
+from pathlib import Path
 model, ck = engine.load_checkpoint(ckpt_path)
 tiles = PackedTiles(env.find_packed_root(DATA_ROOT))
 frame = tiles.rows(SPLIT)
-viz.show_predictions(model, ck, tiles, frame[frame["px_drydown"] + frame["px_nutrient_deficiency"] > 5000], n=4);
+stressed = frame[frame["px_drydown"] + frame["px_nutrient_deficiency"] > 5000]
+run_dir = Path(ckpt_path).parent
+viz.show_predictions(model, ck, tiles, stressed if len(stressed) else frame, n=6,
+                     save_to=run_dir / f"predictions_{SPLIT}.png");
 
 # %% [markdown]
 # ## All runs side by side
@@ -69,4 +73,6 @@ viz.show_predictions(model, ck, tiles, frame[frame["px_drydown"] + frame["px_nut
 import json
 rows = [json.loads(p.read_text()) | {"run": p.parent.name, "file": p.name} for p in env.find_files("**/eval_*.json")]
 cols = ["run", "split", "tta", "tiles", "miou", "iou_drydown", "iou_nutrient_deficiency", "iou_weed_cluster"]
-pd.DataFrame(rows)[[c for c in cols if rows and c in rows[0]]].sort_values("miou", ascending=False).round(4) if rows else "no results yet"
+comparison = pd.DataFrame(rows)[[c for c in cols if rows and c in rows[0]]].sort_values("miou", ascending=False).round(4) if rows else pd.DataFrame()
+comparison.to_csv(env.default_dirs()["output"] / "comparison.csv", index=False)
+comparison

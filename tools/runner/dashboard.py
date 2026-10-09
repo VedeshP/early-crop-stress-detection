@@ -40,7 +40,7 @@ svg{width:100%;height:160px}.muted{color:var(--muted)}
 <div class="card"><b>Training</b> <span class="muted">(validation mIoU per epoch)</span><div id="chart"></div><table id="epochs"></table></div>
 <div class="card"><b>Alerts</b><pre id="alerts" class="muted">none</pre></div>
 <div class="card"><b>Live log</b> <span class="muted" id="since"></span><pre id="log"></pre></div>
-<p class="muted">Read-only view · refreshes every 10 s · <span id="updated"></span></p>
+<p class="muted">Read-only view · refreshes every 10 s · <a id="dl" href="#">download results (zip)</a> · <span id="updated"></span></p>
 </main><script>
 const T=new URLSearchParams(location.search).get("t")||"";
 const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -73,6 +73,7 @@ async function load(){
   document.getElementById("updated").textContent="updated "+new Date().toLocaleTimeString();
  }catch(e){document.getElementById("updated").textContent="cannot reach runner ("+e+")";}
 }
+document.getElementById("dl").href="results.zip?t="+encodeURIComponent(T);
 load();setInterval(load,10000);
 </script></body></html>"""
 
@@ -112,14 +113,21 @@ class Dashboard:
                     self.end_headers()
                     self.wfile.write(b"forbidden: add ?t=<token> from the notification")
                     return
+                headers = {}
                 if url.path.endswith("/api/state"):
                     body, ctype = json.dumps(dash._payload()).encode(), "application/json"
+                elif url.path.endswith("/results.zip"):
+                    from .results import zip_bytes
+                    body, ctype = zip_bytes(dash.state.data.get("workspace") or dash.state.dir.parent.parent), "application/zip"
+                    headers["Content-Disposition"] = f'attachment; filename="results_{time.strftime("%Y%m%d-%H%M%S")}.zip"'
                 else:
                     body, ctype = PAGE.encode(), "text/html; charset=utf-8"
                 self.send_response(200)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
+                for k, v in headers.items():
+                    self.send_header(k, v)
                 self.end_headers()
                 self.wfile.write(body)
 
