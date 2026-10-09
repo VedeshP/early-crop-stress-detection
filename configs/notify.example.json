@@ -1,0 +1,36 @@
+{
+  "_help": "Copy to notify.json (or run: python run.py notify-init). Enable channels by filling them in; set enabled=false to switch one off. Keep this file private - it holds tokens.",
+  "min_seconds_between_same": 300,
+  "channels": {
+    "ntfy": {
+      "enabled": true,
+      "server": "https://ntfy.sh",
+      "topic": "agrivision-CHANGE-ME-to-something-random"
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token": "123456:ABC... from @BotFather",
+      "chat_id": "your chat id (message the bot, then open https://api.telegram.org/bot<token>/getUpdates)"
+    },
+    "discord": {
+      "enabled": false,
+      "webhook_url": "https://discord.com/api/webhooks/..."
+    },
+    "email": {
+      "enabled": false,
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "username": "you@gmail.com",
+      "password": "a Gmail app password, not your normal password",
+      "from": "you@gmail.com",
+      "to": "you@gmail.com"
+    },
+    "file": {
+      "enabled": true,
+      "path": "workspace/notifications.log"
+    },
+    "console": {
+      "enabled": true
+    }
+  }
+}

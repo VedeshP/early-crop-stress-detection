@@ -1,0 +1,51 @@
+{
+  "name": "rtx4000ada",
+  "target": "local",
+  "workspace": "workspace",
+  "steps": ["data", "explore", "train", "evaluate"],
+
+  "data": {
+    "source": "prepare",
+    "kaggle_dataset": "YOUR_KAGGLE_USERNAME/agrivision-2021-packed",
+    "path": null
+  },
+
+  "prepare": {
+    "mode": "relevant",
+    "negative_fraction": 0.2,
+    "keep_all_splits": ["val"],
+    "max_output_gb": 40,
+    "workers": 0
+  },
+
+  "train_common": {
+    "batch_size": "auto",
+    "num_workers": "auto",
+    "epochs": 30,
+    "steps_per_epoch": 2000,
+    "val_max_tiles": 4000,
+    "time_limit_hours": null,
+    "final_tta": "flip",
+    "resume": "auto"
+  },
+
+  "train_runs": [
+    {"run_name": "unet_r34_rgbn_idx",       "arch": "unet",          "encoder": "resnet34", "lr": 0.0003},
+    {"run_name": "segformer_b2_rgbn_idx",   "arch": "segformer",     "encoder": "mit_b2",   "lr": 0.00006},
+    {"run_name": "segformer_b2_rgb",        "arch": "segformer",     "encoder": "mit_b2",   "lr": 0.00006, "channels": ["r", "g", "b"]},
+    {"run_name": "segformer_b2_rgbn",       "arch": "segformer",     "encoder": "mit_b2",   "lr": 0.00006, "channels": ["r", "g", "b", "nir"]},
+    {"run_name": "deeplabv3p_r50_rgbn_idx", "arch": "deeplabv3plus", "encoder": "resnet50", "lr": 0.0001}
+  ],
+
+  "evaluate": {"batch_size": 16, "num_workers": 8},
+
+  "watch": {
+    "poll_seconds": 30,
+    "epoch_every": 1,
+    "heartbeat_minutes": 180,
+    "stall_minutes": 40,
+    "gpu_temp_c": 87,
+    "disk_free_gb": 10,
+    "gpu_idle_minutes": 20
+  }
+}

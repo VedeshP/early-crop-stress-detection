@@ -1,0 +1,13 @@
+# Install PyTorch first, matching your GPU/CUDA: https://pytorch.org/get-started/locally/
+#   e.g. pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+segmentation-models-pytorch>=0.5.0
+opencv-python-headless
+numpy
+pandas
+matplotlib
+psutil
+# to run notebooks (Jupyter / VS Code / headless runner)
+jupyterlab
+nbclient
+nbformat
+ipykernel

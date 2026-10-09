@@ -218,3 +218,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- AgriVision toolkit ---
+_smoke/
+_rtest/
+_work/
+_agrivision_src/
+workspace/
+data/
+outputs/
+executed/
+*.pt
+configs/notify.json
+notifications.log
+cloudflared*.exe
+ngrok*.exe
