@@ -123,8 +123,15 @@ def preflight(workspace, need_gpu=True, need_gb=0):
                      ("nbclient", "nbclient"), ("ipykernel", "ipykernel"), ("pandas", "pandas"), ("matplotlib", "matplotlib")):
         try:
             __import__(mod)
-        except ImportError:
-            issues.append(f"missing package: pip install {pip}")
+        except ModuleNotFoundError as e:
+            if e.name == mod:
+                issues.append(f"missing package: python -m pip install {pip}")
+            else:
+                issues.append(f"{mod} is installed but needs '{e.name}', which is missing: python -m pip install {e.name}")
+        except ImportError as e:  # installed but cannot load, e.g. "DLL load failed" on Windows
+            issues.append(f"{mod} is installed but fails to load: {str(e)[:200]}"
+                          + (" -> install the Microsoft Visual C++ Redistributable (x64) and reboot"
+                             if "DLL load failed" in str(e) else ""))
         except Exception as e:  # installed but fails to load (e.g. torch/torchvision mismatch)
             issues.append(f"{mod} fails to import: {type(e).__name__}: {str(e)[:160]}")
     try:
